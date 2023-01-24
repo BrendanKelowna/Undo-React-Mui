@@ -1,0 +1,16 @@
+
+> undo@0.0.0 test C:\Users\bk_j8\Documents\websites\business_management\packages\undo
+> jest --passWithNoTests
+
+PASS src/__tests__/Undo.test.tsx (8.051 s)
+  Undo tests
+    √ Initial render state (153 ms)
+    √ Adding undos (87 ms)
+    √ Exec undos (163 ms)
+    √ Exec redo (164 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       4 passed, 4 total
+Snapshots:   0 total
+Time:        9.296 s
+Ran all test suites.
