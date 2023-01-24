@@ -2,7 +2,7 @@ import "@testing-library/jest-dom";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import Undo, { UndoProps } from "../Undo";
-import useUndoState, { UndoObj } from "../UndoState";
+import useUndo, { UndoObj } from "../useUndo";
 
 //* Mocks
 function mockAction() {
@@ -41,7 +41,7 @@ function MockUndo({ test, ...props }: Partial<UndoProps> & { test: string }) {
     redoDisabled,
     undo,
     redo,
-  } = useUndoState();
+  } = useUndo();
 
   return (
     <div>

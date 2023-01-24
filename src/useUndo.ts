@@ -2,9 +2,9 @@
 import { useState } from "react";
 
 //* Types
-export type UndoState = ReturnType<typeof useUndoState>;
+export type UndoState = ReturnType<typeof useUndo>;
 
-export type UseUndoStateProps = {
+export type UseUndoProps = {
   onSuccess?: (message: string) => void;
   onError?: (error: any) => void;
 };
@@ -20,7 +20,7 @@ export type UndoObj = UndoMessages & {
   redo: () => Promise<any>;
 };
 
-export default function useUndoState({ onSuccess, onError }: UseUndoStateProps = {}) {
+export default function useUndo({ onSuccess, onError }: UseUndoProps = {}) {
   //* State
   const [undoList, setUndoList] = useState<UndoObj[]>([]);
   const [index, setIndex] = useState(0);

@@ -1,17 +1,17 @@
 import { createContext, PropsWithChildren, useContext } from "react";
-import useUndoState, { UndoState, UseUndoStateProps } from "./UndoState";
+import useUndo, { UndoState, UseUndoProps } from "./useUndo";
 
 //* Types
-type UseUndoContextProps = PropsWithChildren<UseUndoStateProps>;
+export type UndoProviderProps = PropsWithChildren<UseUndoProps>;
 
-const UndoContext = createContext(null as null | UndoState);
+const UndoContext = createContext<null | UndoState>(null);
 
-export function useUndo() {
+export function useUndoContext() {
   return useContext(UndoContext);
 }
 
-export function UndoProvider({ onSuccess, onError, children }: UseUndoContextProps) {
-  const state = useUndoState({ onSuccess, onError });
+export function UndoProvider({ onSuccess, onError, children }: UndoProviderProps) {
+  const state = useUndo({ onSuccess, onError });
 
   return <UndoContext.Provider value={state}>{children}</UndoContext.Provider>;
 }
