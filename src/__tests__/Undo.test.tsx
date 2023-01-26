@@ -1,68 +1,79 @@
 import "@testing-library/jest-dom";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import Undo, { UndoProps } from "../Undo";
-import useUndo, { UndoObj } from "../useUndo";
+import Undo from "../Undo";
+import {
+  UndoContextAdd,
+  UndoContextState,
+  UndoProvider,
+  useUndoAddContext,
+  useUndoContext,
+} from "../UndoContext";
+import useUndo, { UndoObj, UndoState } from "../useUndo";
 
 //* Mocks
-function mockAction() {
-  return jest.fn();
+type MockServices = {
+  service: () => void;
+  undoService: () => void;
+  redoService: () => void;
+};
+
+function mockServices(services?: MockServices) {
+  return {
+    service: services?.service ?? jest.fn(),
+    undoService: services?.undoService ?? jest.fn(),
+    redoService: services?.redoService ?? jest.fn(),
+  };
 }
 
-function mockUndoObj(): UndoObj {
-  mockAction();
+function mockUndoObj(
+  { undoService, redoService }: MockServices = mockServices()
+): UndoObj {
   return {
-    undo: () => Promise.resolve(mockUndoObj()),
+    undo: () => Promise.resolve(undoService()),
     undoDescription: `undo action`,
-    redo: () => Promise.resolve(mockUndoObj()),
+    redo: () => Promise.resolve(redoService()),
     redoDescription: `redo action`,
   };
 }
 
-function MockAddButton({ add }: { add: (item: UndoObj) => void }) {
+function MockUndoWithState({ state }: { state: UndoState }) {
+  const newState = useUndo();
+  Object.assign(state, newState);
+
   return (
-    <button
-      data-testid="addBtn"
-      type="button"
-      name="add"
-      onClick={() => add(mockUndoObj())}
-    >
-      Add
-    </button>
+    <Undo
+      undo={newState.undo}
+      redo={newState.redo}
+      undoDescription={newState.undoDescription}
+      redoDescription={newState.redoDescription}
+      undoDisabled={newState.undoDisabled}
+      redoDisabled={newState.redoDisabled}
+    />
   );
 }
 
-function MockUndo({ test, ...props }: Partial<UndoProps> & { test: string }) {
-  const {
-    add,
-    undoDescription,
-    redoDescription,
-    undoDisabled,
-    redoDisabled,
-    undo,
-    redo,
-  } = useUndo();
+function MockUndoWithContext({
+  state,
+  service,
+}: {
+  state: UndoContextState;
+  service: { add: UndoContextAdd };
+}) {
+  const newState = useUndoContext();
+  Object.assign(state, newState);
 
-  return (
-    <div>
-      <MockAddButton add={add} />
-      <Undo
-        undo={undo}
-        redo={redo}
-        redoDisabled={redoDisabled}
-        undoDisabled={undoDisabled}
-        undoDescription={undoDescription}
-        redoDescription={redoDescription}
-        {...props}
-      />
-    </div>
-  );
+  const newService = { add: useUndoAddContext() };
+  Object.assign(service, newService);
+
+  return <Undo {...newState} />;
 }
 
 describe("Undo tests", () => {
   test("Initial render state", () => {
     //* Setup
-    render(<MockUndo test="initial" />);
+    const state = {} as UndoState;
+    render(<MockUndoWithState state={state} />);
 
     //* Elements
     const undoBtn = screen.getByRole("button", {
@@ -77,105 +88,154 @@ describe("Undo tests", () => {
     expect(redoBtn).toBeDisabled();
   });
 
-  test("Adding undos", async () => {
-    //* Setup
-    render(<MockUndo test="add" />);
+  describe("Undo state test", () => {
+    test("Adding undos", async () => {
+      //* Setup
+      const state = {} as UndoState;
+      render(<MockUndoWithState state={state} />);
 
-    //* Elements
-    const addButton = screen.getByTestId("addBtn") as HTMLButtonElement;
+      //* Elements
+      const undoBtn = screen.getByRole("button", {
+        name: "Undo",
+      }) as HTMLButtonElement;
 
-    const undoBtn = screen.getByRole("button", {
-      name: "Undo",
-    }) as HTMLButtonElement;
+      const redoBtn = screen.getByRole("button", {
+        name: "Redo",
+      }) as HTMLButtonElement;
 
-    const redoBtn = screen.getByRole("button", {
-      name: "Redo",
-    }) as HTMLButtonElement;
+      act(() => state.add(mockUndoObj()));
+      expect(undoBtn).toBeEnabled();
+      expect(redoBtn).toBeDisabled();
 
-    userEvent.click(addButton);
-    await waitFor(() => expect(undoBtn).toBeEnabled(), { timeout: 500 });
-    await waitFor(() => expect(redoBtn).toBeDisabled(), { timeout: 500 });
+      act(() => state.add(mockUndoObj()));
+      expect(undoBtn).toBeEnabled();
+      expect(redoBtn).toBeDisabled();
 
-    userEvent.click(addButton);
-    await waitFor(() => expect(undoBtn).toBeEnabled(), { timeout: 500 });
-    await waitFor(() => expect(redoBtn).toBeDisabled(), { timeout: 500 });
+      act(() => state.add(mockUndoObj()));
+      expect(undoBtn).toBeEnabled();
+      expect(redoBtn).toBeDisabled();
+    });
 
-    userEvent.click(addButton);
-    await waitFor(() => expect(undoBtn).toBeEnabled(), { timeout: 500 });
-    await waitFor(() => expect(redoBtn).toBeDisabled(), { timeout: 500 });
+    test("Exec undos", async () => {
+      //* Setup
+      const services = [mockServices(), mockServices(), mockServices()];
+      const state = {} as UndoState;
+      render(<MockUndoWithState state={state} />);
+
+      //* Elements
+      const undoBtn = screen.getByRole("button", {
+        name: "Undo",
+      }) as HTMLButtonElement;
+
+      const redoBtn = screen.getByRole("button", {
+        name: "Redo",
+      }) as HTMLButtonElement;
+
+      act(() => state.add(mockUndoObj(services[0])));
+      act(() => state.add(mockUndoObj(services[1])));
+      act(() => state.add(mockUndoObj(services[2])));
+
+      expect(undoBtn).toBeEnabled();
+      expect(redoBtn).toBeDisabled();
+
+      await userEvent.click(undoBtn);
+      expect(services[2].undoService).toHaveBeenCalledTimes(1);
+      expect(undoBtn).toBeEnabled();
+      expect(redoBtn).toBeEnabled();
+
+      await userEvent.click(undoBtn);
+      expect(services[1].undoService).toHaveBeenCalledTimes(1);
+      expect(undoBtn).toBeEnabled();
+      expect(redoBtn).toBeEnabled();
+
+      await userEvent.click(undoBtn);
+      expect(services[0].undoService).toHaveBeenCalledTimes(1);
+      expect(undoBtn).toBeDisabled();
+      expect(redoBtn).toBeEnabled();
+    });
+
+    test("Exec redo", async () => {
+      //* Setup
+      const services = [mockServices(), mockServices(), mockServices()];
+      const state = {} as UndoState;
+      render(<MockUndoWithState state={state} />);
+
+      //* Elements
+      const undoBtn = screen.getByRole("button", {
+        name: "Undo",
+      }) as HTMLButtonElement;
+
+      const redoBtn = screen.getByRole("button", {
+        name: "Redo",
+      }) as HTMLButtonElement;
+
+      act(() => state.add(mockUndoObj(services[0])));
+      act(() => state.add(mockUndoObj(services[1])));
+      act(() => state.add(mockUndoObj(services[2])));
+
+      expect(undoBtn).toBeEnabled();
+      expect(redoBtn).toBeDisabled();
+
+      await userEvent.click(undoBtn);
+      await userEvent.click(undoBtn);
+      await userEvent.click(undoBtn);
+      expect(undoBtn).toBeDisabled();
+      expect(redoBtn).toBeEnabled();
+
+      await userEvent.click(redoBtn);
+      expect(services[0].redoService).toHaveBeenCalledTimes(1);
+      expect(undoBtn).toBeEnabled();
+      expect(redoBtn).toBeEnabled();
+
+      await userEvent.click(redoBtn);
+      expect(services[1].redoService).toHaveBeenCalledTimes(1);
+      expect(undoBtn).toBeEnabled();
+      expect(redoBtn).toBeEnabled();
+
+      await userEvent.click(redoBtn);
+      expect(services[2].redoService).toHaveBeenCalledTimes(1);
+      expect(undoBtn).toBeEnabled();
+      expect(redoBtn).toBeDisabled();
+    });
   });
+  describe("Undo Context tests", () => {
+    test("Make sure context works", async () => {
+      //* Setup
+      const services = mockServices();
+      const contextServices = {} as { add: UndoContextAdd };
+      const state = {} as UndoContextState;
+      render(
+        <UndoProvider>
+          <MockUndoWithContext state={state} service={contextServices} />
+        </UndoProvider>
+      );
 
-  test("Exec undos", async () => {
-    //* Setup
-    render(<MockUndo test="exec" />);
+      //* Elements
+      const undoBtn = screen.getByRole("button", {
+        name: "Undo",
+      }) as HTMLButtonElement;
 
-    //* Elements
-    const addButton = screen.getByTestId("addBtn") as HTMLButtonElement;
+      const redoBtn = screen.getByRole("button", {
+        name: "Redo",
+      }) as HTMLButtonElement;
 
-    const undoBtn = screen.getByRole("button", {
-      name: "Undo",
-    }) as HTMLButtonElement;
+      expect(undoBtn).toBeDisabled();
+      expect(redoBtn).toBeDisabled();
 
-    const redoBtn = screen.getByRole("button", {
-      name: "Redo",
-    }) as HTMLButtonElement;
+      act(() => contextServices.add(mockUndoObj(services)));
 
-    userEvent.click(addButton);
-    userEvent.click(addButton);
-    userEvent.click(addButton);
-    await waitFor(() => expect(undoBtn).toBeEnabled(), { timeout: 500 });
-    await waitFor(() => expect(redoBtn).toBeDisabled(), { timeout: 500 });
+      expect(undoBtn).toBeEnabled();
+      expect(redoBtn).toBeDisabled();
 
-    userEvent.click(undoBtn);
-    await waitFor(() => expect(undoBtn).toBeEnabled(), { timeout: 500 });
-    await waitFor(() => expect(redoBtn).toBeEnabled(), { timeout: 500 });
+      await userEvent.click(undoBtn);
+      expect(services.undoService).toHaveBeenCalledTimes(1);
+      expect(undoBtn).toBeDisabled();
+      expect(redoBtn).toBeEnabled();
 
-    userEvent.click(undoBtn);
-    await waitFor(() => expect(undoBtn).toBeEnabled(), { timeout: 500 });
-    await waitFor(() => expect(redoBtn).toBeEnabled(), { timeout: 500 });
-
-    userEvent.click(undoBtn);
-    await waitFor(() => expect(undoBtn).toBeDisabled(), { timeout: 500 });
-    await waitFor(() => expect(redoBtn).toBeEnabled(), { timeout: 500 });
-  });
-
-  test("Exec redo", async () => {
-    //* Setup
-    render(<MockUndo test="redo" />);
-
-    //* Elements
-    const addButton = screen.getByTestId("addBtn") as HTMLButtonElement;
-
-    const undoBtn = screen.getByRole("button", {
-      name: "Undo",
-    }) as HTMLButtonElement;
-
-    const redoBtn = screen.getByRole("button", {
-      name: "Redo",
-    }) as HTMLButtonElement;
-
-    userEvent.click(addButton);
-    userEvent.click(addButton);
-    userEvent.click(addButton);
-    await waitFor(() => expect(undoBtn).toBeEnabled(), { timeout: 500 });
-    await waitFor(() => expect(redoBtn).toBeDisabled(), { timeout: 500 });
-
-    userEvent.click(undoBtn);
-    userEvent.click(undoBtn);
-    userEvent.click(undoBtn);
-    await waitFor(() => expect(undoBtn).toBeDisabled(), { timeout: 500 });
-    await waitFor(() => expect(redoBtn).toBeEnabled(), { timeout: 500 });
-
-    userEvent.click(redoBtn);
-    await waitFor(() => expect(undoBtn).toBeEnabled(), { timeout: 500 });
-    await waitFor(() => expect(redoBtn).toBeEnabled(), { timeout: 500 });
-
-    userEvent.click(redoBtn);
-    await waitFor(() => expect(undoBtn).toBeEnabled(), { timeout: 500 });
-    await waitFor(() => expect(redoBtn).toBeEnabled(), { timeout: 500 });
-
-    userEvent.click(redoBtn);
-    await waitFor(() => expect(undoBtn).toBeEnabled(), { timeout: 500 });
-    await waitFor(() => expect(redoBtn).toBeDisabled(), { timeout: 500 });
+      await userEvent.click(redoBtn);
+      expect(services.redoService).toHaveBeenCalledTimes(1);
+      expect(undoBtn).toBeEnabled();
+      expect(redoBtn).toBeDisabled();
+    });
   });
 });
