@@ -6,6 +6,7 @@ A react component, context, and state to give services the ability to undo and r
 
 - React
 - Mui
+- Mui icons
 
 ## Usage
 
